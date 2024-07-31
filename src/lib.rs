@@ -24,24 +24,28 @@ fn camel_case_to_snake_case(camel_case: &str) -> String {
  Args:
   - struct: The struct to generate SQL methods for
   - table_name: The name of the table in the database
+  - id_type: The type of the ID field in the struct
 */
 #[proc_macro]
 pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
-    let data = syn::punctuated::Punctuated::<syn::Type, syn::Token![,]>::parse_terminated
+    let mut data = syn::punctuated::Punctuated::<syn::Type, syn::Token![,]>::parse_terminated
         .parse(input)
-        .expect("Failed to parse punctuated inpute");
+        .expect("Failed to parse punctuated inpute")
+        .into_iter();
 
-    let struct_name = data.first().expect("Failed to get first portion of data");
-    let table_name = data.last().expect("Failed to get last portion of data");
+    let struct_name = data.next().expect("Failed to get struct name");
+    let table_name = data.next().expect("Failed to get table name");
+    let id_type = data.next().expect("Failed to get id type");
 
     let (struct_name, snake_case_struct_name) = match struct_name {
         syn::Type::Path(p) => {
-            let struct_name = &p
+            let struct_name = p
                 .path
                 .segments
                 .first()
                 .expect("Failed to get first portion of struct_name segments")
-                .ident;
+                .ident
+                .clone();
             let snake_case_struct_name =
                 camel_case_to_snake_case(&struct_name.to_string()).to_lowercase();
             (struct_name, snake_case_struct_name)
@@ -50,7 +54,7 @@ pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
     };
 
     let table_name = match table_name {
-        syn::Type::Path(p) => &p.path,
+        syn::Type::Path(p) => p.path.clone(),
         _ => panic!("Expected a table name"),
     };
 
@@ -96,14 +100,14 @@ pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
 
     let output = quote! {
 
-        pub fn #get_struct_ident(struct_id: &Uuid, pool: &PgPool) -> Result<#struct_name, SqlError> {
+        pub fn #get_struct_ident(struct_id: &#id_type, pool: &PgPool) -> Result<#struct_name, SqlError> {
             use diesel::prelude::*;
-            let mut conn = get_connection!(pool);
+            let conn = get_connection!(pool);
 
-            #get_with_conn_struct_ident(struct_id, &mut conn)
+            #get_with_conn_struct_ident(struct_id, &conn)
         }
 
-        pub fn #get_with_conn_struct_ident(struct_id: &Uuid, conn: &mut PgPooledConnection) -> Result<#struct_name, SqlError> {
+        pub fn #get_with_conn_struct_ident(struct_id: &#id_type, conn: &PgPooledConnection) -> Result<#struct_name, SqlError> {
             use diesel::prelude::*;
 
             let result = #table_name::table
@@ -119,12 +123,12 @@ pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
         pub fn #insert_struct_fn_ident(new_struct: &#insert_struct_ident, pool: &PgPool) -> Result<#struct_name, SqlError> {
             use diesel::prelude::*;
 
-            let mut conn = get_connection!(pool);
+            let conn = get_connection!(pool);
 
-            #insert_with_conn_struct_fn_ident(new_struct, &mut conn)
+            #insert_with_conn_struct_fn_ident(new_struct, &conn)
         }
 
-        pub fn #insert_with_conn_struct_fn_ident(new_struct: &#insert_struct_ident, conn: &mut PgPooledConnection) -> Result<#struct_name, SqlError> {
+        pub fn #insert_with_conn_struct_fn_ident(new_struct: &#insert_struct_ident, conn: &PgPooledConnection) -> Result<#struct_name, SqlError> {
             use #table_name::dsl::*;
             use diesel::prelude::*;
 
@@ -141,14 +145,14 @@ pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
             Ok(result)
         }
 
-        pub fn #update_struct_fn_ident(struct_id: &Uuid, updated_struct: &#insert_struct_ident, pool: &PgPool) -> Result<#struct_name, SqlError> {
+        pub fn #update_struct_fn_ident(struct_id: &#id_type, updated_struct: &#insert_struct_ident, pool: &PgPool) -> Result<#struct_name, SqlError> {
             use diesel::prelude::*;
 
-            let mut conn = get_connection!(pool);
-            #update_with_conn_struct_fn_ident(struct_id, updated_struct, &mut conn)
+            let conn = get_connection!(pool);
+            #update_with_conn_struct_fn_ident(struct_id, updated_struct, &conn)
         }
 
-        pub fn #update_with_conn_struct_fn_ident(struct_id: &Uuid, updated_struct: &#insert_struct_ident, conn: &mut PgPooledConnection) -> Result<#struct_name, SqlError> {
+        pub fn #update_with_conn_struct_fn_ident(struct_id: &#id_type, updated_struct: &#insert_struct_ident, conn: &PgPooledConnection) -> Result<#struct_name, SqlError> {
             use #table_name::dsl::*;
             use diesel::prelude::*;
 
@@ -164,14 +168,14 @@ pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
             Ok(result)
         }
 
-        pub fn #patch_struct_ident(struct_id: &Uuid, updated_struct: &#update_struct_ident, pool: &PgPool) -> Result<#struct_name, SqlError> {
+        pub fn #patch_struct_ident(struct_id: &#id_type, updated_struct: &#update_struct_ident, pool: &PgPool) -> Result<#struct_name, SqlError> {
             use diesel::prelude::*;
 
-            let mut conn = get_connection!(pool);
-            #patch_with_conn_struct_ident(struct_id, updated_struct, &mut conn)
+            let conn = get_connection!(pool);
+            #patch_with_conn_struct_ident(struct_id, updated_struct, &conn)
         }
 
-        pub fn #patch_with_conn_struct_ident(struct_id: &Uuid, updated_struct: &#update_struct_ident, conn: &mut PgPooledConnection) -> Result<#struct_name, SqlError> {
+        pub fn #patch_with_conn_struct_ident(struct_id: &#id_type, updated_struct: &#update_struct_ident, conn: &PgPooledConnection) -> Result<#struct_name, SqlError> {
             use #table_name::dsl::*;
             use diesel::prelude::*;
 
@@ -187,15 +191,15 @@ pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
             Ok(result)
         }
 
-        pub fn #delete_struct_ident(struct_id: &Uuid, pool: &PgPool) -> Result<(), SqlError> {
+        pub fn #delete_struct_ident(struct_id: &#id_type, pool: &PgPool) -> Result<(), SqlError> {
             use #table_name::dsl::*;
             use diesel::prelude::*;
 
-            let mut conn = get_connection!(pool);
-            #delete_with_conn_struct_ident(struct_id, &mut conn)
+            let conn = get_connection!(pool);
+            #delete_with_conn_struct_ident(struct_id, &conn)
         }
 
-        pub fn #delete_with_conn_struct_ident(struct_id: &Uuid, conn: &mut PgPooledConnection) -> Result<(), SqlError> {
+        pub fn #delete_with_conn_struct_ident(struct_id: &#id_type, conn: &PgPooledConnection) -> Result<(), SqlError> {
             use #table_name::dsl::*;
             use diesel::prelude::*;
 
