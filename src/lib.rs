@@ -110,14 +110,13 @@ pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
         pub fn #get_with_conn_struct_ident(struct_id: &#id_type, conn: &mut PgPooledConnection) -> Result<#struct_name, SqlError> {
             use diesel::prelude::*;
 
-            let sql_action_result: #struct_name = #table_name::table
+            #table_name::table
                 .find(struct_id)
                 .first(conn)
                 .map_err(|e| {
                     log::error!("Failed to get {} with ID {struct_id} (error: {e})", stringify!(#struct_name));
                     SqlError::DieselError(e)
-                })?;
-            Ok(sql_action_result)
+                })
         }
 
         pub fn #insert_struct_fn_ident(new_struct: &#insert_struct_ident, pool: &PgPool) -> Result<#struct_name, SqlError> {
@@ -132,7 +131,7 @@ pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
             use #table_name::dsl::*;
             use diesel::prelude::*;
 
-            let sql_action_result: #struct_name = diesel::insert_into(#table_name::table)
+            diesel::insert_into(#table_name::table)
                 .values((
                     new_struct,
                     created_at.eq(diesel::dsl::now),
@@ -141,8 +140,7 @@ pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
                 .get_result::<#struct_name>(conn).map_err(|e| {
                     log::error!("Failed to insert new {} (error: {e})", stringify!(#struct_name));
                     SqlError::DieselError(e)
-                })?;
-            Ok(sql_action_result)
+                })
         }
 
         pub fn #update_struct_fn_ident(struct_id: &#id_type, updated_struct: &#insert_struct_ident, pool: &PgPool) -> Result<#struct_name, SqlError> {
@@ -156,7 +154,7 @@ pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
             use #table_name::dsl::*;
             use diesel::prelude::*;
 
-            let sql_action_result: #struct_name = diesel::update(#table_name::table.find(struct_id))
+            diesel::update(#table_name::table.find(struct_id))
                 .set((
                     updated_struct,
                     updated_at.eq(diesel::dsl::now)
@@ -164,8 +162,7 @@ pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
                 .get_result::<#struct_name>(conn).map_err(|e| {
                     log::error!("Failed to update {} with ID {struct_id} (error: {e})", stringify!(#struct_name));
                     SqlError::DieselError(e)
-                })?;
-            Ok(sql_action_result)
+                })
         }
 
         pub fn #patch_struct_ident(struct_id: &#id_type, updated_struct: &#update_struct_ident, pool: &PgPool) -> Result<#struct_name, SqlError> {
@@ -179,7 +176,7 @@ pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
             use #table_name::dsl::*;
             use diesel::prelude::*;
 
-            let sql_action_result: #struct_name = diesel::update(
+            diesel::update(
                     #table_name::table
                         .find(struct_id)
                 )
@@ -187,8 +184,7 @@ pub fn generate_sql_methods(input: TokenStream) -> TokenStream {
                 .get_result::<#struct_name>(conn).map_err(|e| {
                     log::error!("Failed to patch {} with ID {struct_id} (error: {e})", stringify!(#struct_name));
                     SqlError::DieselError(e)
-                })?;
-            Ok(sql_action_result)
+                })
         }
 
         pub fn #delete_struct_ident(struct_id: &#id_type, pool: &PgPool) -> Result<(), SqlError> {
